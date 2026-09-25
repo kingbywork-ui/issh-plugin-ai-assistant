@@ -1,0 +1,21 @@
+{
+  "name": "issh-plugin-ai-assistant",
+  "version": "0.2.0",
+  "description": "AI assistant for issh Terminal",
+  "repository": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "node scripts/test-assistant.mjs && node scripts/test-stream.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^7.0.0"
+  },
+  "license": "MIT"
+}
