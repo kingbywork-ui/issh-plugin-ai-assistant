@@ -1,0 +1,29 @@
+.ai-assistant-panel { display:flex; flex-direction:column; flex:1; min-height:0; color:var(--ops-fg); font:13px/1.5 var(--ops-font-sans); }
+.ai-assistant-panel * { box-sizing:border-box; }
+.ai-assistant-toolbar { display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--ops-line); }
+.ai-assistant-toolbar span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ops-fg-muted); font-size:12px; }
+.ai-assistant-panel button { border:1px solid var(--ops-line); border-radius:6px; padding:5px 9px; background:var(--ops-base); color:var(--ops-fg); cursor:pointer; }
+.ai-assistant-panel button:hover { border-color:var(--ops-signal); }
+.ai-assistant-panel button:disabled { cursor:default; opacity:.5; }
+.ai-assistant-settings { display:grid; gap:8px; max-height:42%; overflow:auto; padding:10px 12px; border-bottom:1px solid var(--ops-line); }
+.ai-assistant-settings label { display:grid; gap:4px; color:var(--ops-fg-muted); font-size:12px; }
+.ai-assistant-settings input, .ai-assistant-settings select, .ai-assistant-compose textarea, .ai-assistant-compose select { width:100%; min-width:0; border:1px solid var(--ops-line); border-radius:6px; padding:7px; background:var(--ops-base); color:var(--ops-fg); font:inherit; }
+.ai-assistant-settings .ai-assistant-check { display:flex; align-items:center; gap:7px; }
+.ai-assistant-mcp { display:grid; gap:6px; padding-top:8px; border-top:1px solid var(--ops-line); }
+.ai-assistant-mcp-row { display:flex; align-items:center; gap:5px; }
+.ai-assistant-mcp-row span { flex:1; overflow:hidden; text-overflow:ellipsis; }
+.ai-assistant-mcp-row button { white-space:nowrap; }
+.ai-assistant-check input { width:auto; }
+.ai-assistant-feed { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:10px; padding:14px 12px; }
+.ai-assistant-empty { padding:20px 12px; border:1px dashed var(--ops-line); border-radius:8px; color:var(--ops-fg-muted); }
+.ai-assistant-message { align-self:flex-start; max-width:96%; min-width:60%; padding:9px 11px; border:1px solid var(--ops-line); border-radius:9px; background:var(--ops-base); }
+.ai-assistant-message.user { align-self:flex-end; background:var(--ops-signal-dim); }
+.ai-assistant-role { display:block; margin-bottom:5px; color:var(--ops-fg-muted); font-size:11px; }
+.ai-assistant-text { white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; }
+.ai-assistant-command { display:grid; gap:4px; margin:9px 0; padding:8px; border:1px solid var(--ops-line); border-radius:5px; }
+.ai-assistant-command code { white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; }
+.ai-assistant-command span, .ai-assistant-wait { color:var(--ops-fg-muted); font-size:11px; }
+.ai-assistant-error { padding:8px 12px; color:var(--ops-danger); border-top:1px solid var(--ops-line); }
+.ai-assistant-compose { display:grid; gap:7px; padding:10px 12px; border-top:1px solid var(--ops-line); }
+.ai-assistant-compose textarea { resize:vertical; max-height:180px; }
+.ai-assistant-compose button { justify-self:end; min-width:68px; background:var(--ops-signal-dim); color:var(--ops-signal); }
