@@ -28,4 +28,4 @@ npm.cmd run build
 npm.cmd run package
 ```
 
-安装包为 `issh-plugin-ai-assistant-0.2.1.tgz`（由 `build` 与 `package` 生成）。面板与 MCP/流式网关依赖宿主代码，旧客户端会在加载前拒绝网关 API 版本不匹配的插件。源码构建或生成插件包不等于更新已安装程序。
+安装包为 `issh-plugin-ai-assistant-0.2.2.tgz`（由 `build` 与 `package` 生成）。打包时会核对清单与构建入口版本；面板与 MCP/流式网关依赖宿主代码，旧客户端会在加载前拒绝网关 API 版本不匹配的插件。源码构建或生成插件包不等于更新已安装程序。

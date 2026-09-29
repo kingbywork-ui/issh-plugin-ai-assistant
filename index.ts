@@ -2,22 +2,9 @@ import { mount, unmount } from 'svelte'
 import AssistantPanel from './src/AssistantPanel.svelte'
 import type { IsshPlugin, IsshPluginContext, IsshPluginManifest } from './src/plugin-api'
 import { setPluginContext } from './src/assistant'
+import pluginManifest from './plugin.json'
 
-export const manifest: IsshPluginManifest = {
-    id: 'issh-plugin-ai-assistant',
-    name: 'AI 助手',
-    version: '0.2.0',
-    description: '多模型流式对话、本地 MCP 工具、终端上下文分析与命令辅助',
-    kind: 'feature',
-    entry: 'index.js',
-    minAppVersion: '0.0.6',
-    gatewayApiVersion: '3',
-    capabilities: ['ui.panel.register', 'terminal.read', 'terminal.write', 'network.postJson', 'mcp.stdio', 'mcp.remote'],
-    permissions: ['panel:register', 'terminal:read', 'terminal:write', 'network:postJson', 'mcp:stdio', 'mcp:remote'],
-    author: 'kingbywork-ui',
-    homepage: 'https://github.com/kingbywork-ui/issh-plugin-ai-assistant',
-    repository: 'https://github.com/kingbywork-ui/issh-plugin-ai-assistant',
-}
+export const manifest: IsshPluginManifest = pluginManifest as IsshPluginManifest
 
 const plugin: IsshPlugin = {
     manifest,

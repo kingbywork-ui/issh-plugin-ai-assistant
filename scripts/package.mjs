@@ -2,10 +2,23 @@ import { createHash } from 'node:crypto'
 import { copyFile, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 
 const root = process.cwd()
 const manifest = JSON.parse(await readFile(join(root, 'plugin.json'), 'utf-8'))
+const packageMetadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf-8'))
 const dist = join(root, 'dist')
+if (packageMetadata.version !== manifest.version) {
+    throw new Error(`package.json 版本 ${packageMetadata.version} 与 plugin.json 版本 ${manifest.version} 不一致`)
+}
+if (manifest.entry !== `index-${manifest.version}.js`) {
+    throw new Error(`入口文件名必须包含版本，以避免更新时复用旧模块缓存：index-${manifest.version}.js`)
+}
+const entryModule = await import(pathToFileURL(join(dist, manifest.entry)).href)
+const bundledManifest = entryModule.default?.manifest
+if (bundledManifest?.id !== manifest.id || bundledManifest.version !== manifest.version || bundledManifest.entry !== manifest.entry) {
+    throw new Error(`构建产物与 plugin.json 不一致：期望 ${manifest.id} v${manifest.version} (${manifest.entry})，实际 ${bundledManifest?.id ?? '无'} v${bundledManifest?.version ?? '无'} (${bundledManifest?.entry ?? '无'})`)
+}
 
 await copyFile(join(root, 'plugin.json'), join(dist, 'plugin.json'))
 

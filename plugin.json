@@ -1,11 +1,11 @@
 {
   "id": "issh-plugin-ai-assistant",
   "name": "AI 助手",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "多模型流式对话、本地 MCP 工具、终端上下文分析与命令辅助",
   "kind": "feature",
   "minAppVersion": "0.0.6",
-  "entry": "index.js",
+  "entry": "index-0.2.2.js",
   "gatewayApiVersion": "3",
   "capabilities": ["ui.panel.register", "terminal.read", "terminal.write", "network.postJson", "mcp.stdio", "mcp.remote"],
   "permissions": ["panel:register", "terminal:read", "terminal:write", "network:postJson", "mcp:stdio", "mcp:remote"],
