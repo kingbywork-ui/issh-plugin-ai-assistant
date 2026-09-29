@@ -41,7 +41,7 @@ export interface IsshPluginContext {
             streamClose (streamId: string, options?: GatewayRequestOptions): Promise<{ closed: boolean }>
         }
         mcp: {
-            connect (serverId: string, config: { command: string; arguments?: string[]; cwd?: string; environment?: Record<string, string> }, options?: GatewayRequestOptions): Promise<unknown>
+            connect (serverId: string, config: { transport?: 'stdio' | 'streamable-http' | 'sse'; command?: string; arguments?: string[]; cwd?: string; environment?: Record<string, string>; url?: string; headers?: Record<string, string> }, options?: GatewayRequestOptions): Promise<unknown>
             listTools (serverId: string, options?: GatewayRequestOptions): Promise<{ tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> }>
             callTool (serverId: string, name: string, args: Record<string, unknown>, options?: GatewayRequestOptions): Promise<unknown>
             disconnect (serverId: string, options?: GatewayRequestOptions): Promise<unknown>

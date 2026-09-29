@@ -10,7 +10,17 @@ export interface AssistantConfig {
     includeTerminalContext: boolean
     mcpServers: McpServerConfig[]
 }
-export interface McpServerConfig { id: string; command: string; arguments: string[]; cwd?: string; environment?: Record<string, string> }
+export type McpTransport = 'stdio' | 'streamable-http' | 'sse'
+export interface McpServerConfig {
+    id: string
+    transport?: McpTransport
+    command?: string
+    arguments?: string[]
+    cwd?: string
+    environment?: Record<string, string>
+    url?: string
+    headers?: Record<string, string>
+}
 export interface Message {
     id: string
     role: 'user' | 'assistant'
