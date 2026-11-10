@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 
-const source = await readFile(new URL('../src/assistant.ts', import.meta.url), 'utf8')
+const contextSource = await readFile(new URL('../src/context.ts', import.meta.url), 'utf8')
+const contextCompiled = ts.transpileModule(contextSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+const contextUrl = `data:text/javascript;base64,${Buffer.from(contextCompiled).toString('base64')}`
+const source = (await readFile(new URL('../src/assistant.ts', import.meta.url), 'utf8')).replace("from './context'", `from '${contextUrl}'`)
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
 const api = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`)
 const requests = []
@@ -35,6 +38,7 @@ assert.equal(requests[1].options.headers['anthropic-version'], '2023-06-01')
 assert.equal(JSON.parse(requests[1].options.body).messages[0].role, 'user')
 
 assert.equal(api.redactContext(['token=abc123', 'Bearer abcdefghijklmnop']).includes('abc123'), false)
+assert.equal(api.redactContext(['-----BEGIN PRIVATE KEY-----', 'SYNTHETICKEYBODY', '-----END PRIVATE KEY-----']).includes('SYNTHETICKEYBODY'), false)
 assert.deepEqual(api.extractCommand('```json\n{"command":"ls -la","explanation":"list"}\n```'), { command: 'ls -la', explanation: 'list' })
 assert.equal(api.extractCommand('{"command":"echo ok\\nrm -rf /"}'), null)
 assert.equal(api.assessCommand('rm -rf /'), 'critical')
@@ -43,4 +47,14 @@ assert.equal(api.assessCommand('sudo apt update'), 'medium')
 await api.insertCommand('session-1', 'ls -la')
 assert.deepEqual(requests.at(-1), { sessionId: 'session-1', command: 'ls -la' })
 await assert.rejects(() => api.insertCommand('session-1', 'ls\r'), /控制字符/)
+api.rememberMcpTools('fixture', [{ serverId: 'fixture', name: 'one' }, { serverId: 'fixture', name: 'two' }])
+assert.ok(api.getActiveMcpServerIds().includes('fixture'))
+api.setEnabledMcpToolIds([api.mcpToolKey({ serverId: 'fixture', name: 'two' })])
+assert.deepEqual(api.getEnabledMcpToolIds(), [api.mcpToolKey({ serverId: 'fixture', name: 'two' })])
+const traceMessage = { id: 'trace', role: 'assistant', content: 'done', toolCalls: [{ id: 'call', serverId: 'fixture', toolName: 'two', argumentsText: '{}', status: 'completed', callNumber: 1, durationMs: 12, resultText: 'full result' }] }
+api.saveHistory('fixture-session', [traceMessage])
+assert.deepEqual(api.loadHistory('fixture-session')[0].toolCalls, traceMessage.toolCalls)
+api.forgetMcpTools('fixture')
+assert.equal(api.getActiveMcpServerIds().includes('fixture'), false)
+assert.equal(api.getEnabledMcpToolIds().length, 0)
 console.log('AI 助手模型格式、上下文脱敏和命令插入回归通过')

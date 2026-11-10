@@ -33,5 +33,27 @@
 .ai-assistant-command span, .ai-assistant-wait { color:var(--ops-fg-muted); font-size:11px; }
 .ai-assistant-error { padding:8px 12px; color:var(--ops-danger); border-top:1px solid var(--ops-line); }
 .ai-assistant-compose { display:grid; gap:7px; padding:10px 12px; border-top:1px solid var(--ops-line); }
-.ai-assistant-compose textarea { resize:vertical; max-height:180px; }
+.ai-assistant-compose { overflow:auto; max-height:62%; min-height:180px; }
+.ai-assistant-compose textarea { resize:vertical; min-height:72px; max-height:180px; }
 .ai-assistant-compose button { justify-self:end; min-width:68px; background:var(--ops-signal-dim); color:var(--ops-signal); }
+.ai-assistant-context-picker { display:grid; gap:6px; }
+.ai-assistant-check { display:flex; align-items:center; gap:6px; }
+.ai-assistant-panel details { min-width:0; }
+.ai-assistant-panel summary { cursor:pointer; color:var(--ops-fg-muted); overflow-wrap:anywhere; }
+.ai-assistant-panel pre { white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; margin:7px 0; max-height:240px; overflow:auto; font:12px/1.5 var(--ops-font-mono, monospace); }
+.ai-assistant-preview, .ai-assistant-tool-call, .ai-assistant-tool-picker { border:1px solid var(--ops-line); border-radius:6px; padding:8px; min-width:0; }
+.ai-assistant-preview { background:var(--ops-base); }
+.ai-assistant-preview pre { max-height:180px; }
+.ai-assistant-preview small, .ai-assistant-tool-call small { color:var(--ops-fg-muted); font-size:11px; }
+.ai-assistant-tool-heading { display:flex; justify-content:space-between; flex-wrap:wrap; align-items:center; gap:5px; overflow-wrap:anywhere; }
+.ai-assistant-tool-heading span { color:var(--ops-fg-muted); font-size:11px; }
+.ai-assistant-tool-call { margin-top:8px; }
+.ai-assistant-tool-call.failed { border-color:var(--ops-danger); }
+.ai-assistant-tool-summary { white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0; font-size:12px; }
+.ai-assistant-tool-actions { display:flex; gap:6px; margin:6px 0; }
+.ai-assistant-tool-picker input[type="search"] { width:100%; margin-top:7px; border:1px solid var(--ops-line); border-radius:5px; background:var(--ops-base); color:var(--ops-fg); padding:6px; }
+.ai-assistant-tool-list { max-height:160px; overflow:auto; }
+.ai-assistant-tool-option { display:flex; gap:6px; align-items:flex-start; padding:5px 0; }
+.ai-assistant-tool-option input { flex:none; margin-top:4px; }
+.ai-assistant-tool-option span { display:grid; min-width:0; overflow-wrap:anywhere; }
+.ai-assistant-tool-option small { color:var(--ops-fg-muted); }

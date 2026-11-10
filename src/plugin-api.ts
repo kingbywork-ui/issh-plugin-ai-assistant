@@ -1,58 +1,68 @@
 /** Minimal issh plugin gateway contract used by this standalone plugin repository. */
-export interface GatewayRequestOptions {
-    timeoutMs?: number
-    signal?: AbortSignal
+
+// 与统一 Gateway SDK 重叠的通用类型收敛为 re-export（packages/issh-gateway/src/types）。
+export type { GatewayRequestOptions, IsshPluginManifest } from '../../../packages/issh-gateway/src/types'
+import type { IsshPluginManifest, PluginGateway, PluginStorage } from '../../../packages/issh-gateway/src/types'
+
+/**
+ * 与 SDK 不同构，保留本地形状：
+ * - output 为 `string | string[]`（SDK 面板会话内联形状为 `string[]`）；
+ * - exitCode 允许 undefined（SDK 为 number | null）。
+ * context.ts 的 outputText 依赖该 union，收敛会改变宿主数据适配行为。
+ */
+export interface TerminalCommandContext {
+    command: string
+    exitCode?: number | null
+    output: string | string[]
 }
 
-export interface PanelHostContext {
-    getActiveSession (): { id: string; title: string; kind: string; lines: string[] } | null
-}
-
-export interface IsshPluginManifest {
+/**
+ * 与 SDK PanelHostContext.getActiveSession 的内联会话形状不同构，保留本地：
+ * - cwd/shell/host 为 `string | undefined`（SDK 为 `string | null`）；
+ * - lastCommand/lastFailedCommand 允许 undefined（SDK 为 `| null`）；
+ * - id/title/kind/lines/selectedText 语义一致。
+ */
+export interface ActiveSessionContext {
     id: string
-    name: string
-    version: string
-    description: string
-    kind: 'feature' | 'appearance' | 'integration'
-    entry: string
-    minAppVersion?: string
-    gatewayApiVersion?: string
-    capabilities?: string[]
-    permissions?: string[]
-    author?: string
-    homepage?: string
-    repository?: string
+    title: string
+    kind: string
+    lines: string[]
+    cwd?: string
+    shell?: string
+    host?: string
+    selectedText?: string
+    lastCommand?: TerminalCommandContext
+    lastFailedCommand?: TerminalCommandContext
 }
 
+/**
+ * 与 SDK PanelHostContext 不同构（getActiveSession 返回本插件的 ActiveSessionContext，
+ * 见上），保留本地并注明；confirm 签名与 SDK 一致。运行时按宿主实参结构适配，不强行对齐。
+ */
+export interface PanelHostContext {
+    getActiveSession (): ActiveSessionContext | null
+    confirm? (message: string, title?: string): Promise<boolean>
+}
+
+/**
+ * 上下文整体保留本地：ui.registerPanel 的 mount 回调必须携带本插件 PanelHostContext
+ * （SDK PanelDefinition 会引入 SDK 面板会话形状，见上）。重叠的 http/mcp/terminal/log
+ * 直接取自 SDK PluginGateway；storage 与 SDK PluginStorage 一致（本插件仅用 get/set/delete）。
+ */
 export interface IsshPluginContext {
-    storage: {
-        get (key: string): string | null
-        set (key: string, value: string): void
-        delete (key: string): void
-    }
-    gateway: {
+    storage: PluginStorage
+    gateway: Pick<PluginGateway, 'http' | 'mcp' | 'terminal' | 'log'> & {
         ui: {
             registerPanel (panel: { id: string; title: string; placement: 'right'; mount: (target: HTMLElement, host: PanelHostContext) => () => void }): () => void
         }
-        http: {
-            postJson (url: string, options?: { headers?: Record<string, string>; body?: string } & GatewayRequestOptions): Promise<{ status: number; ok: boolean; body: string }>
-            streamOpen (url: string, options?: { headers?: Record<string, string>; body?: string } & GatewayRequestOptions): Promise<{ streamId: string; status: number }>
-            streamPoll (streamId: string, options?: GatewayRequestOptions): Promise<{ chunkBase64: string; done: boolean }>
-            streamClose (streamId: string, options?: GatewayRequestOptions): Promise<{ closed: boolean }>
-        }
-        mcp: {
-            connect (serverId: string, config: { transport?: 'stdio' | 'streamable-http' | 'sse'; command?: string; arguments?: string[]; cwd?: string; environment?: Record<string, string>; url?: string; headers?: Record<string, string> }, options?: GatewayRequestOptions): Promise<unknown>
-            listTools (serverId: string, options?: GatewayRequestOptions): Promise<{ tools: Array<{ name: string; description?: string; inputSchema?: Record<string, unknown> }> }>
-            callTool (serverId: string, name: string, args: Record<string, unknown>, options?: GatewayRequestOptions): Promise<unknown>
-            disconnect (serverId: string, options?: GatewayRequestOptions): Promise<unknown>
-        }
-        terminal: {
-            write (sessionId: string, data: string, options?: GatewayRequestOptions): Promise<unknown>
-        }
-        log (level: 'info' | 'warn' | 'error', message: string): void
     }
 }
 
+/**
+ * IsshPlugin 保留本地：activate 参数绑定上方本地 IsshPluginContext（SDK IsshPluginContext.gateway.ui
+ * 携带 SDK PanelHostContext，与本插件 PanelHostContext 因 getActiveSession 形状不同构而逆变不兼容；
+ * 与 SDK 一致的 deactivate 钩子已包含）。manifest 已 re-export SDK。
+ */
 export interface IsshPlugin {
     manifest: IsshPluginManifest
     activate (context: IsshPluginContext): void | Promise<void>

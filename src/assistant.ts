@@ -1,4 +1,5 @@
 import type { IsshPluginContext } from './plugin-api'
+import { redactContext as redactTerminalContext, redactText } from './context'
 
 export type Provider = 'openai' | 'anthropic' | 'minimax' | 'glm' | 'ollama' | 'vllm' | 'compatible'
 export type AssistantMode = 'chat' | 'command' | 'explain' | 'fix'
@@ -27,6 +28,25 @@ export interface Message {
     content: string
     command?: string
     sessionId?: string
+    contextText?: string
+    toolCalls?: ToolCallTrace[]
+}
+export interface ToolCallTrace {
+    id: string
+    serverId: string
+    toolName: string
+    argumentsText: string
+    status: 'pending' | 'completed' | 'error' | 'denied' | 'cancelled'
+    callNumber: number
+    durationMs: number
+    resultText?: string
+    truncated?: boolean
+}
+export interface AssistantMcpTool {
+    serverId: string
+    name: string
+    description?: string
+    inputSchema?: Record<string, unknown>
 }
 
 const CONFIG_KEY = 'config'
@@ -42,7 +62,34 @@ export const PROVIDERS: Record<Provider, { label: string; baseUrl: string; model
 }
 
 let context: IsshPluginContext | null = null
+const activeMcpTools = new Map<string, AssistantMcpTool[]>()
+const enabledMcpToolIds = new Set<string>()
+export const MAX_MCP_TOOLS = 64
+export function mcpToolKey (tool: AssistantMcpTool): string { return JSON.stringify([tool.serverId, tool.name]) }
+export function getEnabledMcpToolIds (): string[] { return [...enabledMcpToolIds] }
+export function setEnabledMcpToolIds (ids: string[]): void {
+    const available = new Set(getActiveMcpTools().map(mcpToolKey))
+    enabledMcpToolIds.clear()
+    for (const id of ids) if (available.has(id)) enabledMcpToolIds.add(id)
+}
 export function setPluginContext (value: IsshPluginContext): void { context = value }
+export function getActiveMcpTools (): AssistantMcpTool[] {
+    return [...activeMcpTools.values()].flatMap((tools) => tools)
+}
+export function getActiveMcpServerIds (): string[] {
+    return [...activeMcpTools.keys()]
+}
+export function rememberMcpTools (serverId: string, tools: AssistantMcpTool[]): void {
+    const prior = new Set((activeMcpTools.get(serverId) ?? []).map(mcpToolKey))
+    activeMcpTools.set(serverId, tools)
+    const current = new Set(tools.map(mcpToolKey))
+    for (const id of prior) if (!current.has(id)) enabledMcpToolIds.delete(id)
+    for (const tool of tools) if (!prior.has(mcpToolKey(tool))) enabledMcpToolIds.add(mcpToolKey(tool))
+}
+export function forgetMcpTools (serverId: string): void {
+    for (const tool of activeMcpTools.get(serverId) ?? []) enabledMcpToolIds.delete(mcpToolKey(tool))
+    activeMcpTools.delete(serverId)
+}
 export function pluginContext (): IsshPluginContext {
     if (!context) throw new Error('AI 助手尚未初始化')
     return context
@@ -75,14 +122,8 @@ export function clearHistory (sessionId: string): void {
     pluginContext().storage.delete(HISTORY_PREFIX + sessionId)
 }
 
-const REDACTIONS: Array<[RegExp, string]> = [
-    [/((?:password|passwd|pwd|token|secret|api[_-]?key|private[_-]?key)\s*[=:]\s*)\S+/gi, '$1***'],
-    [/Bearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, 'Bearer ***'],
-    [/sk-[A-Za-z0-9]{16,}/g, 'sk-***'],
-    [/-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----/g, '***PRIVATE KEY***'],
-]
 export function redactContext (lines: string[]): string {
-    return lines.slice(-20).map((line) => REDACTIONS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), line)).join('\n').slice(-10000)
+    return redactTerminalContext(lines)
 }
 
 const SYSTEM: Record<AssistantMode, string> = {
@@ -104,7 +145,7 @@ export async function requestAnswer (config: AssistantConfig, mode: AssistantMod
     if (!provider) throw new Error('不支持的模型服务商')
     if (!config.model.trim()) throw new Error('请填写模型名称')
     if (!config.apiKey.trim() && !['ollama', 'vllm'].includes(config.provider)) throw new Error('请填写 API Key')
-    const conversation = messages.slice(-12).map((message) => ({ role: message.role, content: message.content }))
+    const conversation = messages.slice(-12).map((message) => ({ role: message.role, content: redactText(message.content) }))
     const headers: Record<string, string> = { 'content-type': 'application/json' }
     let body: Record<string, unknown>
     if (provider.format === 'anthropic') {
