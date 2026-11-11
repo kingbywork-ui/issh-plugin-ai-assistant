@@ -4,6 +4,24 @@ import { redactText, redactValue } from './context'
 export type McpTool = AssistantMcpTool
 export interface ToolApproval { (tool: McpTool, args: Record<string, unknown>): Promise<boolean> }
 export type ToolTraceCallback = (trace: ToolCallTrace) => void
+/**
+ * 插件本地工具（如技能的 load_skill）：不经 gateway.mcp，由插件本地执行。
+ * 调用流程与 MCP 工具完全一致：用户确认 → 执行 → ToolCallTrace（serverId 固定为 'skill'）。
+ */
+export interface LocalTool {
+    /** 模型看到的工具名；同名 MCP/本地工具会报冲突。 */
+    name: string
+    description?: string
+    inputSchema?: Record<string, unknown>
+    run (args: Record<string, unknown>): Promise<unknown> | unknown
+}
+export interface StreamOptions {
+    /** 追加到固定 SYSTEM 之后（如技能注入部分）。 */
+    extraSystem?: string
+    /** 插件本地工具；为 undefined 时完全不改变原有行为。 */
+    localTools?: LocalTool[]
+}
+export const LOCAL_TOOL_SERVER_ID = 'skill'
 export const MAX_TOOL_CALLS = 8
 export const MAX_MODEL_ROUNDS = 5
 export const MAX_TRACE_CHARACTERS = 100000
@@ -56,6 +74,7 @@ export async function streamAnswer (
     approve: ToolApproval,
     signal?: AbortSignal,
     onToolTrace?: ToolTraceCallback,
+    options?: StreamOptions,
 ): Promise<string> {
     const provider = PROVIDERS[config.provider]
     if (!provider || !config.model.trim()) throw new Error('请配置模型服务商和模型名称')
@@ -63,8 +82,16 @@ export async function streamAnswer (
     const gateway = pluginContext().gateway
     const format = provider.format
     const names = new Map<string, McpTool>()
+    for (const local of options?.localTools ?? []) {
+        if (names.has(local.name)) throw new Error(`本地工具与 MCP 工具重名：${local.name}`)
+        names.set(local.name, { serverId: LOCAL_TOOL_SERVER_ID, name: local.name, description: local.description, inputSchema: local.inputSchema })
+    }
+    const localTools = new Map((options?.localTools ?? []).map((tool) => [tool.name, tool]))
+    // 本地工具使用原名，不占 MAX_MCP_TOOLS；与 MCP 工具（按原名）重名时直接报错，避免调用路由歧义。
+    if (tools.some((tool) => localTools.has(tool.name))) throw new Error('本地工具与 MCP 工具重名，请取消同名 MCP 工具')
     if (tools.length > MAX_MCP_TOOLS) throw new Error(`本轮已启用 ${tools.length} 个 MCP 工具，请明确选择最多 ${MAX_MCP_TOOLS} 个工具`)
     tools.forEach((tool, index) => names.set(`mcp_${index}_${tool.name.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 48)}`, tool))
+    const system = options?.extraSystem ? `${SYSTEM[mode]}\n\n${options.extraSystem}` : SYSTEM[mode]
     const conversation: Array<Record<string, unknown>> = messages.slice(-12).map(({ role, content }) => ({ role, content: redactText(content) }))
     const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'text/event-stream' }
     if (format === 'anthropic') {
@@ -80,8 +107,8 @@ export async function streamAnswer (
             ? { name, description: tool.description ?? '', input_schema: tool.inputSchema ?? { type: 'object', properties: {} } }
             : { type: 'function', function: { name, description: tool.description ?? '', parameters: tool.inputSchema ?? { type: 'object', properties: {} } } })
         const body: Record<string, unknown> = format === 'anthropic'
-            ? { model: config.model, system: SYSTEM[mode], messages: conversation, max_tokens: 2048, stream: true }
-            : { model: config.model, messages: [{ role: 'system', content: SYSTEM[mode] }, ...conversation], max_tokens: 2048, stream: true }
+            ? { model: config.model, system, messages: conversation, max_tokens: 2048, stream: true }
+            : { model: config.model, messages: [{ role: 'system', content: system }, ...conversation], max_tokens: 2048, stream: true }
         if (toolDefs.length) body.tools = toolDefs
         const opened = await gateway.http.streamOpen(endpoint(config), { headers, body: JSON.stringify(body), timeoutMs: 30000, signal })
         const parser = new SseParser()
@@ -162,7 +189,9 @@ export async function streamAnswer (
                     else {
                         // The gateway presents the host's confirmation for every actual call.
                         if (signal?.aborted) throw new DOMException('请求已取消', 'AbortError')
-                        result = await gateway.mcp.callTool(tool.serverId, tool.name, args, { timeoutMs: 35000, signal })
+                        const local = localTools.get(tool.name)
+                        // 本地工具不访问外部服务，执行结果按与 MCP 相同的规则序列化、脱敏、截断。
+                        result = local ? await local.run(args) : await gateway.mcp.callTool(tool.serverId, tool.name, args, { timeoutMs: 35000, signal })
                         if (signal?.aborted) throw new DOMException('请求已取消', 'AbortError')
                         trace.status = result && typeof result === 'object' && (result as { isError?: unknown }).isError ? 'error' : 'completed'
                     }

@@ -9,7 +9,8 @@ async function load (path, replace = {}) {
     return { url: `data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}` }
 }
 const contextModule = await load('../src/context.ts')
-const assistantModule = await load('../src/assistant.ts', { "from './context'": `from '${contextModule.url}'` })
+const skillsModule = await load('../src/skills.ts', { "from './context'": `from '${contextModule.url}'` })
+const assistantModule = await load('../src/assistant.ts', { "from './context'": `from '${contextModule.url}'`, "from './skills'": `from '${skillsModule.url}'` })
 const assistant = await import(assistantModule.url)
 const streamModule = await load('../src/stream.ts', { "from './assistant'": `from '${assistantModule.url}'`, "from './context'": `from '${contextModule.url}'` })
 const { streamAnswer, SseParser, MAX_TRACE_CHARACTERS } = await import(streamModule.url)

@@ -57,3 +57,13 @@
 .ai-assistant-tool-option input { flex:none; margin-top:4px; }
 .ai-assistant-tool-option span { display:grid; min-width:0; overflow-wrap:anywhere; }
 .ai-assistant-tool-option small { color:var(--ops-fg-muted); }
+.ai-assistant-skills { display:grid; gap:12px; }
+.ai-assistant-skill-row { display:grid; gap:8px; padding:8px; border:1px solid var(--ops-line); border-radius:6px; }
+.ai-assistant-skill-meta { display:grid; gap:2px; min-width:0; overflow-wrap:anywhere; }
+.ai-assistant-skill-meta small { color:var(--ops-fg-muted); }
+.ai-assistant-skill-source { font:11px/1.5 var(--ops-font-mono, monospace); opacity:.8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-assistant-skill-modes { display:flex; flex-wrap:wrap; gap:10px; }
+.ai-assistant-skills .ai-assistant-skill-mode { display:flex; grid-auto-flow:column; align-items:center; gap:4px; }
+.ai-assistant-skill-mode input { width:auto; }
+.ai-assistant-skill-list { margin:6px 0; padding-left:18px; display:grid; gap:4px; overflow-wrap:anywhere; }
+.ai-assistant-skill-list small { display:block; color:var(--ops-fg-muted); }

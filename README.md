@@ -35,4 +35,4 @@ npm.cmd run package
 
 `test-context.mjs` 使用合成终端数据验证四种上下文及脱敏；`test-panel.mjs` 用隔离 Chromium 浏览器验证真实面板，模型、MCP 和存储均为内存 fixture，不会访问真实服务。Windows 自动查找 Edge/Chrome，也可通过 `ISSH_TEST_BROWSER` 指定 Chromium 可执行文件。
 
-安装包为 `issh-plugin-ai-assistant-0.2.2.tgz`（由 `build` 与 `package` 生成）。打包时会核对清单与构建入口版本；面板与 MCP/流式网关依赖宿主代码，旧客户端会在加载前拒绝网关 API 版本不匹配的插件。源码构建或生成插件包不等于更新已安装程序。
+安装包为 `issh-plugin-ai-assistant-0.3.0.tgz`（由 `build` 与 `package` 生成）。打包时会核对清单与构建入口版本；面板与 MCP/流式网关依赖宿主代码，旧客户端会在加载前拒绝网关 API 版本不匹配的插件。源码构建或生成插件包不等于更新已安装程序。

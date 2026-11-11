@@ -4,12 +4,17 @@
     import panelCss from './assistant.css?inline'
     import {
         PROVIDERS, assessCommand, clearHistory, extractCommand, insertCommand,
-        forgetMcpTools, getActiveMcpServerIds, getActiveMcpTools, getEnabledMcpToolIds, loadConfig, loadHistory, MAX_MCP_TOOLS, mcpToolKey, pluginContext, rememberMcpTools, saveConfig, saveHistory, setEnabledMcpToolIds,
+        forgetMcpTools, getActiveMcpServerIds, getActiveMcpTools, getEnabledMcpToolIds, loadConfig, loadHistory, loadSkillSelection, MAX_MCP_TOOLS, mcpToolKey, pluginContext, rememberMcpTools, saveConfig, saveHistory, saveSkillSelection, setEnabledMcpToolIds,
         type AssistantMode, type Message, type McpServerConfig, type McpTransport, type ToolCallTrace,
     } from './assistant'
     import { buildTerminalContext, CONTEXT_SOURCES, redactText, type TerminalContextSource } from './context'
-    import { MAX_MODEL_ROUNDS, MAX_TOOL_CALLS, streamAnswer, type McpTool } from './stream'
+    import { MAX_MODEL_ROUNDS, MAX_TOOL_CALLS, streamAnswer, type LocalTool, type McpTool } from './stream'
+    import {
+        buildSkillPrompt, loadSkill, MAX_SKILL_ROOTS, renderSkillPreview, scanSkills, selectionOf, SKILL_DEFAULT_ROOT, SKILL_MODES,
+        type Skill, type SkillDiagnostic, type SkillFsGateway, type SkillMode,
+    } from './skills'
 
+    type SettingsPage = 'chat' | 'model' | 'mcp' | 'skills'
     let { host }: { host: PanelHostContext } = $props()
     let config = $state(loadConfig())
     let sessionKey = $state('')
@@ -19,19 +24,28 @@
     let mode = $state<AssistantMode>('chat')
     let busy = $state(false)
     let error = $state('')
-    let settingsPage = $state<'chat' | 'model' | 'mcp'>('chat')
+    let settingsPage = $state<SettingsPage>('chat')
     let feed: HTMLDivElement | null = $state(null)
     let tools = $state<McpTool[]>(getActiveMcpTools())
     let connected = $state<string[]>(getActiveMcpServerIds())
     let enabledToolIds = $state<string[]>(getEnabledMcpToolIds())
     let toolSearch = $state('')
     let mcpPending = $state<string[]>([])
+    let skills = $state<Skill[]>([])
+    let skillDiagnostics = $state<SkillDiagnostic[]>([])
+    let skillScanning = $state(false)
+    let skillRootInput = $state('')
+    let skillScanSummary = $state('')
     let contextSource = $state<TerminalContextSource>('recent')
     let recentLines = $state(100)
-    let preview = $state<{ fingerprint: string; text: string; contextText: string; warning?: string; sessionId?: string } | null>(null)
+    // skillText 为本轮注入 system 的技能部分（预览用）；技能只影响 system，不改变发送的对话内容。
+    let preview = $state<{ fingerprint: string; text: string; contextText: string; skillText: string; warning?: string; sessionId?: string } | null>(null)
     const enabledTools = $derived(tools.filter((tool) => enabledToolIds.includes(mcpToolKey(tool))))
     const filteredTools = $derived(tools.filter((tool) => `${tool.serverId} ${tool.name} ${tool.description ?? ''}`.toLowerCase().includes(toolSearch.trim().toLowerCase())))
-    const draftFingerprint = $derived(JSON.stringify([input.trim(), mode, sessionKey, config.includeTerminalContext, contextSource, recentLines, enabledToolIds, config.provider, config.baseUrl, config.model, config.apiKey]))
+    const skillSelection = $derived(selectionOf(skills))
+    const skillPrompt = $derived(buildSkillPrompt(skills, skillSelection))
+    // 技能模式与根目录都会改变 system 注入，因此一并计入指纹，变化后需刷新预览。
+    const draftFingerprint = $derived(JSON.stringify([input.trim(), mode, sessionKey, config.includeTerminalContext, contextSource, recentLines, enabledToolIds, config.provider, config.baseUrl, config.model, config.apiKey, config.skillRoots, skillPrompt.text, skillPrompt.tool]))
     const previewIsCurrent = $derived(Boolean(preview && preview.fingerprint === draftFingerprint))
     let mcpId = $state('local')
     let mcpCommand = $state('')
@@ -51,6 +65,8 @@
         document.head.appendChild(style)
         syncSession()
         const timer = setInterval(syncSession, 1000)
+        // 启动时按已保存的根目录静默扫描，恢复技能列表与各技能模式。
+        if (config.skillRoots.length) void rescanSkills()
         return () => {
             clearInterval(timer); style.remove(); controller?.abort()
         }
@@ -188,6 +204,57 @@
         error = ''
     }
 
+    /** 宿主新接口尚未进入 SDK 类型，这里按约定断言访问。 */
+    function skillFs (): SkillFsGateway {
+        const fs = (pluginContext().gateway as unknown as { fs?: Partial<SkillFsGateway> }).fs
+        if (typeof fs?.listLocalDir !== 'function' || typeof fs.readLocalFile !== 'function') throw new Error('当前宿主版本不支持读取技能目录，请更新 issh 后重试')
+        return fs as SkillFsGateway
+    }
+
+    /** 按当前根目录重新扫描；扫描期间根目录变化则丢弃结果。report 为 true 时把失败显示在错误栏。 */
+    async function rescanSkills (report = false): Promise<void> {
+        if (skillScanning) return
+        const roots = [...config.skillRoots]
+        if (!roots.length) { skills = []; skillDiagnostics = []; skillScanSummary = report ? '请先添加技能根目录' : ''; return }
+        skillScanning = true
+        try {
+            const result = await scanSkills(roots, { fs: skillFs(), modes: loadSkillSelection() })
+            if (JSON.stringify(roots) !== JSON.stringify(config.skillRoots)) return
+            skills = result.skills
+            skillDiagnostics = result.diagnostics
+            skillScanSummary = `已找到 ${result.skills.length} 个技能${result.diagnostics.length ? `，${result.diagnostics.length} 条诊断` : ''}`
+            if (report) error = ''
+        } catch (cause) {
+            if (report) error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            skillScanning = false
+        }
+    }
+
+    function addSkillRoot (): void {
+        const root = skillRootInput.trim()
+        if (!root) { error = '请填写技能根目录路径'; return }
+        const normalize = (value: string): string => value.trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+        if (config.skillRoots.some((item) => normalize(item) === normalize(root))) { error = '该技能根目录已存在'; return }
+        if (config.skillRoots.length >= MAX_SKILL_ROOTS) { error = `最多 ${MAX_SKILL_ROOTS} 个技能根目录`; return }
+        config.skillRoots = [...config.skillRoots, root]
+        skillRootInput = ''
+        persist()
+        void rescanSkills(true)
+    }
+
+    function removeSkillRoot (root: string): void {
+        config.skillRoots = config.skillRoots.filter((item) => item !== root)
+        persist()
+        void rescanSkills()
+    }
+
+    function setSkillMode (skill: Skill, value: SkillMode): void {
+        skills = skills.map((item) => item.id === skill.id ? { ...item, mode: value } : item)
+        saveSkillSelection(selectionOf(skills))
+        error = ''
+    }
+
     function preparePreview (): void {
         if (!input.trim() || busy) return
         syncSession()
@@ -198,7 +265,7 @@
         const contextText = context?.text ?? ''
         preview = {
             fingerprint: draftFingerprint, text: redactText(input.trim()) + (contextText ? `\n\n${contextText}` : ''),
-            contextText, warning: context?.warning, sessionId: active?.id,
+            contextText, skillText: renderSkillPreview(skills, skillSelection), warning: context?.warning, sessionId: active?.id,
         }
         error = ''
     }
@@ -218,6 +285,13 @@
         const requestMode = mode
         const requestConfig = { ...config }
         const requestTools = [...enabledTools]
+        // 提交时对技能拍快照：本轮 system 注入与 load_skill 使用同一份数据。
+        const requestSkills = skills.map((skill) => ({ ...skill }))
+        const requestModes = selectionOf(requestSkills)
+        const requestSkillPrompt = buildSkillPrompt(requestSkills, requestModes)
+        const localTools: LocalTool[] = requestSkillPrompt.tool
+            ? [{ name: requestSkillPrompt.tool.name, description: requestSkillPrompt.tool.description, inputSchema: requestSkillPrompt.tool.inputSchema, run: (args) => loadSkill(requestSkills, requestModes, args) }]
+            : []
         const user: Message = { id: crypto.randomUUID(), role: 'user', content: redactText(question), contextText: snapshot.contextText || undefined }
         const prior = messages
         messages = [...prior, user]
@@ -243,7 +317,7 @@
             }, async () => true, controller.signal, (trace) => {
                 response.toolCalls = [...(response.toolCalls ?? []).filter((item) => item.id !== trace.id), trace]
                 updateResponse(true)
-            })
+            }, { extraSystem: requestSkillPrompt.text || undefined, localTools })
             const parsed = requestMode === 'command' || requestMode === 'fix' ? extractCommand(answer) : null
             response.content = parsed ? (parsed.explanation || '已生成命令，请检查后再插入终端。') : answer
             response.command = parsed?.command
@@ -298,6 +372,7 @@
     }
 </script>
 
+
 <div class="ai-assistant-panel">
     <div class="ai-assistant-toolbar">
         <span title={sessionTitle}>终端：{sessionTitle}</span>
@@ -305,6 +380,7 @@
         {#if busy}<button type="button" onclick={() => controller?.abort()}>停止</button>{/if}
         <button type="button" class:active={settingsPage === 'model'} onclick={() => { settingsPage = settingsPage === 'model' ? 'chat' : 'model'; error = '' }} aria-pressed={settingsPage === 'model'}>模型供应商</button>
         <button type="button" class:active={settingsPage === 'mcp'} onclick={() => { settingsPage = settingsPage === 'mcp' ? 'chat' : 'mcp'; error = '' }} aria-pressed={settingsPage === 'mcp'}>MCP 服务</button>
+        <button type="button" class:active={settingsPage === 'skills'} onclick={() => { settingsPage = settingsPage === 'skills' ? 'chat' : 'skills'; error = '' }} aria-pressed={settingsPage === 'skills'}>技能</button>
     </div>
     {#if settingsPage !== 'chat'}
         <div class="ai-assistant-settings">
@@ -320,6 +396,52 @@
             <label>API 地址<input type="url" bind:value={config.baseUrl} onchange={persist} placeholder="https://api.openai.com/v1" /></label>
             <label>模型<input type="text" bind:value={config.model} onchange={persist} placeholder="模型名称" /></label>
             <label>API Key<input type="password" bind:value={config.apiKey} onchange={persist} autocomplete="off" placeholder="本地模型可留空" /></label>
+            {:else if settingsPage === 'skills'}
+            <div class="ai-assistant-skills">
+                <div class="ai-assistant-settings-heading"><h2>技能</h2><button type="button" onclick={() => { settingsPage = 'chat'; error = '' }}>返回对话</button></div>
+                <p class="ai-assistant-help">读取指定目录中的 Agent Skills 文件（单个 .md 文件，或 &lt;目录&gt;/SKILL.md，需含 name、description frontmatter）。常驻：正文拼入 system；按需：只提供名称和描述，模型经 load_skill 工具加载正文；不启用：完全不出现。</p>
+                <h3>技能根目录</h3>
+                {#each config.skillRoots as root (root)}
+                    <div class="ai-assistant-mcp-row">
+                        <span><strong>{root}</strong></span>
+                        <button type="button" disabled={skillScanning} onclick={() => removeSkillRoot(root)}>删除</button>
+                    </div>
+                {/each}
+                <label>新增根目录<input type="text" bind:value={skillRootInput} onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSkillRoot() } }} placeholder="例如 ~/.claude/skills 或 D:\skills" />（路径须为绝对路径）</label>
+                <div class="ai-assistant-tool-actions">
+                    <button type="button" disabled={skillScanning} onclick={() => { skillRootInput = SKILL_DEFAULT_ROOT; addSkillRoot() }}>使用默认目录</button>
+                    <button type="button" disabled={skillScanning} onclick={addSkillRoot}>添加并扫描</button>
+                    <button type="button" disabled={skillScanning || !config.skillRoots.length} onclick={() => void rescanSkills()}>{skillScanning ? '扫描中…' : '重新扫描'}</button>
+                </div>
+                {#if skillScanSummary}<p class="ai-assistant-help">{skillScanSummary}</p>{/if}
+                {#if skillDiagnostics.length}
+                    <details class="ai-assistant-skill-diagnostics" open>
+                        <summary>扫描诊断（{skillDiagnostics.length}）</summary>
+                        <ul class="ai-assistant-skill-list">
+                            {#each skillDiagnostics as diagnostic}<li><strong>{diagnostic.filePath || '全部目录'}</strong><small>{diagnostic.message}</small></li>{/each}
+                        </ul>
+                    </details>
+                {/if}
+                <h3>已发现的技能（{skills.length}）</h3>
+                {#if skills.length === 0}
+                    <p class="ai-assistant-help">{config.skillRoots.length ? '没有找到有效技能。' : '添加技能根目录后点击扫描。'}</p>
+                {/if}
+                {#each skills as skill (skill.id)}
+                    <div class="ai-assistant-skill-row">
+                        <div class="ai-assistant-skill-meta">
+                            <strong>{skill.name}</strong>
+                            <small>{skill.description}</small>
+                            <small class="ai-assistant-skill-source" title={skill.filePath}>{skill.filePath}</small>
+                            {#if skill.disableModelInvocation}<small>已声明 disable-model-invocation</small>{/if}
+                        </div>
+                        <div class="ai-assistant-skill-modes" role="radiogroup" aria-label="{skill.name} 启用模式">
+                            {#each Object.entries(SKILL_MODES) as [value, label]}
+                                <label class="ai-assistant-skill-mode"><input type="radio" name="skill-mode-{skill.id}" value={value} checked={skill.mode === value} onchange={() => setSkillMode(skill, value as SkillMode)} />{label}</label>
+                            {/each}
+                        </div>
+                    </div>
+                {/each}
+            </div>
             {:else}
             <div class="ai-assistant-mcp">
                 <div class="ai-assistant-settings-heading"><h2>MCP 服务</h2><button type="button" onclick={() => { settingsPage = 'chat'; error = '' }}>返回对话</button></div>
@@ -429,6 +551,9 @@
                 {#if !previewIsCurrent}<p class="ai-assistant-help">问题、上下文来源或工具选择已变化，请刷新预览。</p>{/if}
                 {#if preview.warning}<p class="ai-assistant-help">{preview.warning}</p>{/if}
                 <pre>{preview.text}</pre>
+                {#if preview.skillText}
+                    <details class="ai-assistant-skill-preview"><summary>本轮注入 system 的技能部分</summary><pre>{preview.skillText}</pre></details>
+                {/if}
                 <small>发送使用以上快照；终端产生新输出时可点击刷新预览。</small>
             </section>
         {/if}

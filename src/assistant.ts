@@ -1,5 +1,6 @@
 import type { IsshPluginContext } from './plugin-api'
 import { redactContext as redactTerminalContext, redactText } from './context'
+import { normalizeSelection, type SkillMode } from './skills'
 
 export type Provider = 'openai' | 'anthropic' | 'minimax' | 'glm' | 'ollama' | 'vllm' | 'compatible'
 export type AssistantMode = 'chat' | 'command' | 'explain' | 'fix'
@@ -10,6 +11,8 @@ export interface AssistantConfig {
     apiKey: string
     includeTerminalContext: boolean
     mcpServers: McpServerConfig[]
+    /** 技能文件所在根目录（用户手动填写），默认空。 */
+    skillRoots: string[]
 }
 export type McpTransport = 'stdio' | 'streamable-http' | 'sse'
 export interface McpServerConfig {
@@ -50,6 +53,7 @@ export interface AssistantMcpTool {
 }
 
 const CONFIG_KEY = 'config'
+const SKILLS_SELECTION_KEY = 'skills:selection'
 const HISTORY_PREFIX = 'history:'
 export const PROVIDERS: Record<Provider, { label: string; baseUrl: string; model: string; format: 'openai' | 'anthropic' }> = {
     openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', format: 'openai' },
@@ -96,13 +100,18 @@ export function pluginContext (): IsshPluginContext {
 }
 
 export function defaultConfig (): AssistantConfig {
-    return { provider: 'openai', baseUrl: PROVIDERS.openai.baseUrl, model: PROVIDERS.openai.model, apiKey: '', includeTerminalContext: false, mcpServers: [] }
+    return { provider: 'openai', baseUrl: PROVIDERS.openai.baseUrl, model: PROVIDERS.openai.model, apiKey: '', includeTerminalContext: false, mcpServers: [], skillRoots: [] }
 }
 export function loadConfig (): AssistantConfig {
     try {
         const saved = pluginContext().storage.get(CONFIG_KEY)
         const parsed = saved ? JSON.parse(saved) as Partial<AssistantConfig> : {}
-        return { ...defaultConfig(), ...parsed, mcpServers: Array.isArray(parsed.mcpServers) ? parsed.mcpServers : [] }
+        return {
+            ...defaultConfig(), ...parsed,
+            mcpServers: Array.isArray(parsed.mcpServers) ? parsed.mcpServers : [],
+            // 旧版本配置没有 skillRoots，向后兼容为 []。
+            skillRoots: Array.isArray(parsed.skillRoots) ? parsed.skillRoots.filter((root): root is string => typeof root === 'string' && Boolean(root.trim())) : [],
+        }
     } catch { return defaultConfig() }
 }
 export function saveConfig (config: AssistantConfig): void {
@@ -120,6 +129,16 @@ export function saveHistory (sessionId: string, messages: Message[]): void {
 }
 export function clearHistory (sessionId: string): void {
     pluginContext().storage.delete(HISTORY_PREFIX + sessionId)
+}
+/** 技能选择按稳定 id（root + 相对路径）单独持久化，与 config 分开。 */
+export function loadSkillSelection (): Record<string, SkillMode> {
+    try {
+        const saved = pluginContext().storage.get(SKILLS_SELECTION_KEY)
+        return saved ? normalizeSelection(JSON.parse(saved)) : {}
+    } catch { return {} }
+}
+export function saveSkillSelection (selection: Record<string, SkillMode>): void {
+    try { pluginContext().storage.set(SKILLS_SELECTION_KEY, JSON.stringify(normalizeSelection(selection))) } catch { /* 存储已满时保留当前会话选择 */ }
 }
 
 export function redactContext (lines: string[]): string {

@@ -1,14 +1,14 @@
 {
   "id": "issh-plugin-ai-assistant",
   "name": "AI 助手",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "多模型流式对话、本地 MCP 工具、终端上下文分析与命令辅助",
   "kind": "feature",
   "minAppVersion": "0.0.6",
-  "entry": "index-0.2.2.js",
+  "entry": "index-0.3.0.js",
   "gatewayApiVersion": "3",
-  "capabilities": ["ui.panel.register", "terminal.read", "terminal.write", "network.postJson", "mcp.stdio", "mcp.remote"],
-  "permissions": ["panel:register", "terminal:read", "terminal:write", "network:postJson", "mcp:stdio", "mcp:remote"],
+  "capabilities": ["ui.panel.register", "terminal.read", "terminal.write", "network.postJson", "mcp.stdio", "mcp.remote", "fs.read"],
+  "permissions": ["panel:register", "terminal:read", "terminal:write", "network:postJson", "mcp:stdio", "mcp:remote", "fs:read"],
   "author": "kingbywork-ui",
   "homepage": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant",
   "repository": "https://github.com/kingbywork-ui/issh-plugin-ai-assistant"
