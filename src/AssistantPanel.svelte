@@ -10,8 +10,8 @@
     import { buildTerminalContext, CONTEXT_SOURCES, redactText, type TerminalContextSource } from './context'
     import { MAX_MODEL_ROUNDS, MAX_TOOL_CALLS, streamAnswer, type LocalTool, type McpTool } from './stream'
     import {
-        buildSkillPrompt, loadSkill, MAX_SKILL_ROOTS, renderSkillPreview, scanSkills, selectionOf, SKILL_DEFAULT_ROOT, SKILL_MODES,
-        type Skill, type SkillDiagnostic, type SkillFsGateway, type SkillMode,
+        buildSkillPrompt, loadSkill, MAX_SKILL_ROOTS, renderSkillPreview, scanSkills, selectionOf, SKILL_DEFAULT_ROOT, SKILL_MODES, skillFs,
+        type Skill, type SkillDiagnostic, type SkillMode,
     } from './skills'
 
     type SettingsPage = 'chat' | 'model' | 'mcp' | 'skills'
@@ -204,13 +204,6 @@
         error = ''
     }
 
-    /** 宿主新接口尚未进入 SDK 类型，这里按约定断言访问。 */
-    function skillFs (): SkillFsGateway {
-        const fs = (pluginContext().gateway as unknown as { fs?: Partial<SkillFsGateway> }).fs
-        if (typeof fs?.listLocalDir !== 'function' || typeof fs.readLocalFile !== 'function') throw new Error('当前宿主版本不支持读取技能目录，请更新 issh 后重试')
-        return fs as SkillFsGateway
-    }
-
     /** 按当前根目录重新扫描；扫描期间根目录变化则丢弃结果。report 为 true 时把失败显示在错误栏。 */
     async function rescanSkills (report = false): Promise<void> {
         if (skillScanning) return
@@ -218,7 +211,7 @@
         if (!roots.length) { skills = []; skillDiagnostics = []; skillScanSummary = report ? '请先添加技能根目录' : ''; return }
         skillScanning = true
         try {
-            const result = await scanSkills(roots, { fs: skillFs(), modes: loadSkillSelection() })
+            const result = await scanSkills(roots, { fs: skillFs(pluginContext()), modes: loadSkillSelection() })
             if (JSON.stringify(roots) !== JSON.stringify(config.skillRoots)) return
             skills = result.skills
             skillDiagnostics = result.diagnostics

@@ -1,8 +1,8 @@
 /** Minimal issh plugin gateway contract used by this standalone plugin repository. */
 
-// 与统一 Gateway SDK 重叠的通用类型收敛为 re-export（packages/issh-gateway/src/types）。
-export type { GatewayRequestOptions, IsshPluginManifest } from '../../../packages/issh-gateway/src/types'
-import type { IsshPluginManifest, PluginGateway, PluginStorage } from '../../../packages/issh-gateway/src/types'
+// 与统一 Gateway SDK 重叠的通用类型收敛为 re-export（SDK types.ts 的副本随插件仓库同步）。
+export type { GatewayRequestOptions, IsshPluginManifest, PluginGateway, PluginStorage } from './sdk-types'
+import type { IsshPluginManifest, PluginGateway, PluginStorage } from './sdk-types'
 
 /**
  * 与 SDK 不同构，保留本地形状：
@@ -46,12 +46,12 @@ export interface PanelHostContext {
 
 /**
  * 上下文整体保留本地：ui.registerPanel 的 mount 回调必须携带本插件 PanelHostContext
- * （SDK PanelDefinition 会引入 SDK 面板会话形状，见上）。重叠的 http/mcp/terminal/log
+ * （SDK PanelDefinition 会引入 SDK 面板会话形状，见上）。重叠的 http/mcp/fs/terminal/log
  * 直接取自 SDK PluginGateway；storage 与 SDK PluginStorage 一致（本插件仅用 get/set/delete）。
  */
 export interface IsshPluginContext {
     storage: PluginStorage
-    gateway: Pick<PluginGateway, 'http' | 'mcp' | 'terminal' | 'log'> & {
+    gateway: Pick<PluginGateway, 'http' | 'mcp' | 'fs' | 'terminal' | 'log'> & {
         ui: {
             registerPanel (panel: { id: string; title: string; placement: 'right'; mount: (target: HTMLElement, host: PanelHostContext) => () => void }): () => void
         }

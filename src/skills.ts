@@ -1,4 +1,5 @@
 import { redactText, redactValue } from './context'
+import type { IsshPluginContext } from './plugin-api'
 
 /** 技能启用模式：常驻全文、按需（目录 + load_skill 工具）、不启用。 */
 export type SkillMode = 'always' | 'on-demand' | 'off'
@@ -30,12 +31,24 @@ export interface SkillTool {
     inputSchema: Record<string, unknown>
 }
 
-/** 宿主 gateway.fs 的新增能力（SDK types.ts 由宿主侧更新，这里按约定断言使用）。 */
+/** 技能扫描用到的宿主 fs 能力；运行时按类型断言取用（旧宿主可能缺少这两个方法）。 */
 export interface SkillFsGateway {
     listLocalDir (root?: string | null, options?: { signal?: AbortSignal }): Promise<{ root: string | null; entries: LocalDirEntry[] }>
     readLocalFile (path: string, options?: { signal?: AbortSignal }): Promise<string | null>
 }
 export interface LocalDirEntry { name: string; path: string; isDir: boolean; isFile: boolean }
+
+/**
+ * 取宿主 gateway.fs 的技能目录能力。SDK 已声明 fs.listLocalDir/readLocalFile，
+ * 但旧版宿主运行时可能缺失，这里只做方法存在性检查。
+ */
+export function skillFs (context: IsshPluginContext): SkillFsGateway {
+    const fs = context.gateway.fs
+    if (!fs || typeof fs.listLocalDir !== 'function' || typeof fs.readLocalFile !== 'function') {
+        throw new Error('当前宿主版本不支持读取技能目录，请更新 issh 后重试')
+    }
+    return fs as unknown as SkillFsGateway
+}
 
 export const MAX_SKILL_ROOTS = 8
 export const MAX_SKILL_ENTRIES = 500

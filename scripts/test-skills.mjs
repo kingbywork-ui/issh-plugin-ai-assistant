@@ -14,6 +14,12 @@ const contextUrl = await load('../src/context.ts')
 const skillsUrl = await load('../src/skills.ts', { "from './context'": `from '${contextUrl}'` })
 const skills = await import(skillsUrl)
 
+// ---- 技能目录能力检查（skillFs 只做方法存在性检查）----
+const { fs: abilityFs } = { fs: { listLocalDir: async () => ({ root: null, entries: [] }), readLocalFile: async () => null } }
+assert.equal(skills.skillFs({ gateway: { fs: abilityFs } }).listLocalDir, abilityFs.listLocalDir)
+assert.throws(() => skills.skillFs({ gateway: {} }), /不支持读取技能目录/, 'old hosts without fs.listLocalDir get a clear error')
+assert.throws(() => skills.skillFs({ gateway: { fs: { listLocalDir: async () => ({ root: null, entries: [] }) } } }), /不支持读取技能目录/)
+
 // ---- 内存目录树 + 假 gateway.fs ----
 // 模拟宿主：路径统一 / 分隔、大小写不敏感（Windows），一次只列一层，缺失目录返回空列表。
 const ws = String.fromCharCode(92)
