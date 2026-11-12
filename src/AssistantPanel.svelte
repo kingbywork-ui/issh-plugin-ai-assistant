@@ -10,8 +10,8 @@
     import { buildTerminalContext, CONTEXT_SOURCES, redactText, type TerminalContextSource } from './context'
     import { MAX_MODEL_ROUNDS, MAX_TOOL_CALLS, streamAnswer, type LocalTool, type McpTool } from './stream'
     import {
-        buildSkillPrompt, loadSkill, MAX_SKILL_ROOTS, renderSkillPreview, scanSkills, selectionOf, SKILL_DEFAULT_ROOT, SKILL_MODES, skillFs,
-        type Skill, type SkillDiagnostic, type SkillMode,
+        buildSkillPrompt, loadSkill, MAX_SKILL_ROOTS, renderSkillPreview, scanSkills, selectionOf, SKILL_MODES, skillFs,
+        type Skill, type SkillDiagnostic, type SkillFsGateway, type SkillMode,
     } from './skills'
 
     type SettingsPage = 'chat' | 'model' | 'mcp' | 'skills'
@@ -224,8 +224,8 @@
         }
     }
 
-    function addSkillRoot (): void {
-        const root = skillRootInput.trim()
+    function addSkillRoot (input?: string): void {
+        const root = (input ?? skillRootInput).trim()
         if (!root) { error = '请填写技能根目录路径'; return }
         const normalize = (value: string): string => value.trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
         if (config.skillRoots.some((item) => normalize(item) === normalize(root))) { error = '该技能根目录已存在'; return }
@@ -234,6 +234,28 @@
         skillRootInput = ''
         persist()
         void rescanSkills(true)
+    }
+
+    let pickingDirectory = $state(false)
+
+    /** 通过宿主系统目录对话框选择技能根目录；宿主不支持时回退为手动填写。 */
+    async function browseSkillRoot (): Promise<void> {
+        if (pickingDirectory || skillScanning) return
+        let pick: SkillFsGateway['pickSkillDirectory']
+        try { pick = skillFs(pluginContext()).pickSkillDirectory } catch (cause) {
+            error = `${cause instanceof Error ? cause.message : String(cause)}；也可手动填写下方路径`
+            return
+        }
+        if (typeof pick !== 'function') { error = '当前宿主版本不支持浏览目录，请手动填写路径'; return }
+        pickingDirectory = true
+        try {
+            const root = await pick.call(pluginContext().gateway.fs, undefined)
+            if (root) addSkillRoot(root)
+        } catch (cause) {
+            error = cause instanceof Error ? cause.message : String(cause)
+        } finally {
+            pickingDirectory = false
+        }
     }
 
     function removeSkillRoot (root: string): void {
@@ -400,10 +422,10 @@
                         <button type="button" disabled={skillScanning} onclick={() => removeSkillRoot(root)}>删除</button>
                     </div>
                 {/each}
-                <label>新增根目录<input type="text" bind:value={skillRootInput} onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSkillRoot() } }} placeholder="例如 ~/.claude/skills 或 D:\skills" />（路径须为绝对路径）</label>
+                <label>新增根目录<input type="text" bind:value={skillRootInput} onkeydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSkillRoot() } }} placeholder="也可直接粘贴绝对路径，如 D:\skills" /></label>
                 <div class="ai-assistant-tool-actions">
-                    <button type="button" disabled={skillScanning} onclick={() => { skillRootInput = SKILL_DEFAULT_ROOT; addSkillRoot() }}>使用默认目录</button>
-                    <button type="button" disabled={skillScanning} onclick={addSkillRoot}>添加并扫描</button>
+                    <button type="button" disabled={skillScanning || pickingDirectory} onclick={() => void browseSkillRoot()}>{pickingDirectory ? '选择中…' : '浏览目录'}</button>
+                    <button type="button" disabled={skillScanning} onclick={() => addSkillRoot()}>添加并扫描</button>
                     <button type="button" disabled={skillScanning || !config.skillRoots.length} onclick={() => void rescanSkills()}>{skillScanning ? '扫描中…' : '重新扫描'}</button>
                 </div>
                 {#if skillScanSummary}<p class="ai-assistant-help">{skillScanSummary}</p>{/if}

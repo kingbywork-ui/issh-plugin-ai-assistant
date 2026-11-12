@@ -35,6 +35,8 @@ export interface SkillTool {
 export interface SkillFsGateway {
     listLocalDir (root?: string | null, options?: { signal?: AbortSignal }): Promise<{ root: string | null; entries: LocalDirEntry[] }>
     readLocalFile (path: string, options?: { signal?: AbortSignal }): Promise<string | null>
+    /** 旧宿主可能没有该系统目录对话框方法。 */
+    pickSkillDirectory? (options?: { signal?: AbortSignal }): Promise<string | null>
 }
 export interface LocalDirEntry { name: string; path: string; isDir: boolean; isFile: boolean }
 
@@ -58,7 +60,7 @@ export const SKILL_INLINE_BUDGET = 12000
 export const SKILL_TOOL_NAME = 'load_skill'
 export const MAX_DIAGNOSTICS = 50
 const CONCURRENCY = 8
-/** 设置页中代表「宿主默认技能目录」的占位根目录（不传 root 给 listLocalDir）。 */
+/** 旧版本保存过的占位根目录；现在由宿主 fs.pickSkillDirectory 直接返回真实路径。 */
 export const SKILL_DEFAULT_ROOT = '~/.claude/skills'
 
 function normalizePath (value: string): string {

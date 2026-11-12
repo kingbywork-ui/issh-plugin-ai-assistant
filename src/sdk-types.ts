@@ -162,8 +162,9 @@ export interface PluginGateway {
      * 本地文件读取（只读）：
      * - readLocalText 仅限 shell 历史文件（路径白名单），缺失返回 null；
      * - listLocalDir 列出 root 下一层条目（不递归，最多 5000 条），root 须为绝对路径，
-     *   同时授权该目录供 readLocalFile 读取；root 缺省时尝试 ~/.claude/skills 等常见技能目录，
+     *   同时授权该目录供本插件 readLocalFile 读取；root 缺省时尝试 ~/.claude/skills 等常见技能目录，
      *   全部不存在时返回 { root: null, entries: [] }；指向 root 外的符号链接被跳过；
+     * - pickSkillDirectory 弹出系统目录选择框，用户选定后授权并返回该目录（/ 分隔），取消返回 null；
      * - readLocalFile 仅读取已授权目录内的 .md 文件，超过 256 KiB、不存在或非 UTF-8 返回 null，
      *   未授权/越界/非 .md 路径抛错。
      */
@@ -172,6 +173,7 @@ export interface PluginGateway {
         readLocalText (path: string, options?: GatewayRequestOptions): Promise<string | null>
         listLocalDir (root?: string | null, options?: GatewayRequestOptions): Promise<{ root: string | null; entries: Array<{ name: string; path: string; isDir: boolean; isFile: boolean }> }>
         readLocalFile (path: string, options?: GatewayRequestOptions): Promise<string | null>
+        pickSkillDirectory (options?: GatewayRequestOptions): Promise<string | null>
     }
     /** SFTP 文件操作（对接 isshd sftp.* RPC，参数 camelCase）。 */
     sftp: {
